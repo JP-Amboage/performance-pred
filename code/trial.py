@@ -1,3 +1,4 @@
+from importlib.metadata import SelectableGroups
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.layers import MaxPooling2D
@@ -15,7 +16,6 @@ class Trial:
 		self.config["lr"] = config["lr"] if "lr" in config else 0.01
 		self.config["momentum"] = config["momentum"] if "momentum" in config else 0.9
 
-
 		self.X_train = X_train
 		self.X_test = X_test
 		self.y_train = y_train
@@ -31,7 +31,12 @@ class Trial:
 		# compile model
 		opt = SGD(learning_rate=self.config["lr"], momentum=self.config["momentum"])
 		self.model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+
+		self.loss = []
+		self.acc = []
 	
 	def run_n_epochs(self, n: int):
 		self.model.fit(self.X_train, self.y_train, epochs=n, batch_size=32)
-		self.loss, self.acc =  self.model.evaluate(self.X_test, self.y_test, verbose=0)
+		loss, acc =  self.model.evaluate(self.X_test, self.y_test, verbose=0)
+		self.loss.append(loss)
+		self.acc.append(acc)

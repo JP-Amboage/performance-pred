@@ -25,14 +25,10 @@ def train_n_confs(n_samples: int, train_ratio: float, search_space: dict, max_ep
 		print(config)
 		trial = Trial(config, X_train, X_test, y_train, y_test)
 		loss, acc = [],[]
-		for _ in range(max_epochs):
-			trial.run_n_epochs(1)
-			loss.append(trial.loss)
-			acc.append(trial.acc)
-		
+		trial.run_n_epochs(max_epochs)
 		trials.append(trial)
-		accs.append(acc)
-		losses.append(loss)
+		accs.append(trial.acc[:])
+		losses.append(trial.loss[:])
 	return trials, np.array(accs), np.array(losses)
 
 def finite_difs(curve):
@@ -119,7 +115,7 @@ def main(known_epochs: int, total_epochs: int, model_file: str, scaler_file: str
 		i=i+1
 		with open("results", 'a') as file:
 				writer = csv.writer(file)
-				writer.writerow([name+".csv", trial.acc, trial.loss])
+				writer.writerow([name+".csv", trial.acc[-1], trial.loss[-1]])
 
 if __name__ == "__main__":
 	main()

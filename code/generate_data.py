@@ -85,14 +85,10 @@ def main(n_samples: int, max_epochs: int, filename :str, train_ratio: float):
 		config = sample_config(search_space)
 		print(config)
 		trial = Trial(config, X_train, X_test, y_train, y_test)
-		loss, acc = [],[]
-		for __ in range(max_epochs):
-			trial.run_n_epochs(1)
-			loss.append(trial.loss)
-			acc.append(trial.acc)
+		trial.run_n_epochs(max_epochs)
 		line = list(trial.config.values())
-		line.extend(acc)
-		line.extend(loss)
+		line.extend(trial.acc)
+		line.extend(trial.loss)
 		with open(filename, 'a') as file:
 			writer = csv.writer(file)
 			writer.writerow(line)
