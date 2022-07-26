@@ -35,7 +35,8 @@ class Trial:
 		self.model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 	
 	def run_n_epochs(self, n: int):
-		self.model.fit(self.X_train, self.y_train, epochs=n, batch_size=32)
-		loss, acc =  self.model.evaluate(self.X_test, self.y_test, verbose=0)
-		self.loss.append(loss)
-		self.acc.append(acc)
+		for _ in range(n): #done this way to be able to store the learning curve
+			self.model.fit(self.X_train, self.y_train, epochs=1, batch_size=32)
+			loss, acc =  self.model.evaluate(self.X_test, self.y_test, verbose=0)
+			self.loss.append(loss)
+			self.acc.append(acc)

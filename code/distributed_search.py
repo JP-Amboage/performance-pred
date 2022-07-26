@@ -10,6 +10,7 @@ import csv
 import click
 import numpy as np
 from filelock import FileLock
+from sqlalchemy import false
 from trial import Trial
 from joblib import load, dump
 
@@ -53,7 +54,7 @@ class Predictor:
 
 	def predict(self,config, curve):
 		difs1, difs2 = self.__finite_difs(np.array(curve))
-		X = np.append(np.append(np.append(np.array(list(config.values())),np.array(curve)),difs1),difs2)
+		X = np.append(np.append(np.append(np.array(list(config.values())),np.array(curve)),difs1),difs2).reshape(1, -1)
 		X = self.x_scaler.transform(X)
 		return self.svr.predict(X)
 	
@@ -92,7 +93,30 @@ def finish_training(trial, n_epochs):
 @click.option('--fresults_file', default="fresults.csv", help='File to store the results of totally trained configs')
 
 def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: str, y_scaler_file: str, top_k: int, n_samples: int,presults_file: str, fresults_file: str ):
-	
+	print(
+        """	Starting run with:
+        	known_epochs: {}
+        	total_epochs: {}
+        	model_file: {}
+			x_scaler_file: {}
+			y_scaler_file: {}
+			top_k: {}
+			n_samples: {}
+			presults_file: {}
+			fresults_file: {}
+      	""".format(
+            known_epochs,
+            total_epochs,
+            model_file,
+            x_scaler_file,
+			y_scaler_file,
+			top_k,
+			n_samples,
+			presults_file,
+			fresults_file
+        )
+    )
+
 	#instantiate the performance predictor
 	predictor = Predictor(svr=model_file, x_scaler = x_scaler_file, y_scaler = y_scaler_file)
 
@@ -116,29 +140,35 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 		# There is only one return result by default.
 		result_id = done_ids[0]
 
-		hps = trial.config
 		trial = ray.get(result_id)
+		hps = trial.config
 
 		pred = predictor.predict(hps, trial.loss[:])
-
+		
 		line = []
 		for hp in list(hps.values()):
 			line.append(hp)
 		line.extend(trial.loss)
-		line.append(predictor.y_scaler.inverse_transform(pred))
-		with open("results", 'a') as file:
+		line.append(predictor.y_scaler.inverse_transform(pred.reshape(1, -1)))
+		print(pred)
+
+		with open(presults_file, 'a') as file:
 			writer = csv.writer(file)
 			writer.writerow(line)
 		
 		if pred < best_pred[0]:
 			best_pred = best_pred[1:] #remove the worst
 			best_trials = best_trials[1:] #remove the worst
-			for i in range(top_k-1):
+			flag_inserted = False
+			for i in range(len(best_pred)):
 				if(pred > best_pred[i]):
-					idx = i if i < top_k-2 else top_k-1
-					best_pred.insert(idx,pred)
-					best_trials.insert(idx,trial)
-				break
+					best_pred.insert(i,pred)
+					best_trials.insert(i,trial)
+					flag_inserted = True
+					break
+			if not flag_inserted:
+				best_pred.insert(top_k-1,pred)
+				best_trials.insert(top_k-1,trial)
 	
 	#Launch tasks to finish evaluation of most prmising trials
 	for trial in best_trials:
@@ -157,11 +187,11 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 		line = []
 		for hp in list(trial.config.values()):
 			line.append(hp)
-			line.extend(trial.loss)
-			line.append(predictor.y_scaler.inverse_transform(pred))
-			with open(fresults_file, 'a') as file:
-				writer = csv.writer(file)
-				writer.writerow(line)
+		line.extend(trial.loss)
+		with open(fresults_file, 'a') as file:
+			writer = csv.writer(file)
+			writer.writerow(line)
+		i=i+1
 
 
 
