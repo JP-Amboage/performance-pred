@@ -4,6 +4,7 @@ https://docs.ray.io/en/latest/ray-core/examples/plot_hyperparameter.html
 '''
 
 from math import inf
+import random
 import os
 import csv
 import click
@@ -23,9 +24,12 @@ ray.init()
 # A function for generating random hyperparameters.
 def generate_hyperparameters():
 	return {
-		"learning_rate": 10 ** np.random.uniform(-5, 1),
-		"batch_size": np.random.randint(1, 100),
-		"momentum": np.random.uniform(0, 1),
+		"filters": random.choice([8, 16, 32, 64, 128]),
+		"strides": random.choice([2, 3, 5]),
+		"max_pool": random.choice([2, 3, 5]),
+		"1st_dense": random.choice([20, 40, 60, 80, 100, 120, 140, 160, 180, 200]),
+		"lr": np.exp(random.uniform(np.log(1e-5),np.log(0.1))),
+		"momentum": random.uniform(0,1)
 	}
 
 def get_data_loaders(train_ratio = 0.8, random_state = 42):
@@ -87,7 +91,7 @@ def finish_training(trial, n_epochs):
 @click.option('--presults_file', default="presults.csv", help='File to store the results of partially trained configs')
 @click.option('--fresults_file', default="fresults.csv", help='File to store the results of totally trained configs')
 
-def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: str, y_scaler_file: str, top_k: int, n_samples: int,fresults_file: str ):
+def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: str, y_scaler_file: str, top_k: int, n_samples: int,presults_file: str, fresults_file: str ):
 	
 	#instantiate the performance predictor
 	predictor = Predictor(svr=model_file, x_scaler = x_scaler_file, y_scaler = y_scaler_file)
@@ -100,7 +104,7 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 	remaining_ids = []
 
 	# Randomly generate sets of hyperparameters and launch a task to evaluate it.
-	for i in range(known_epochs):
+	for i in range(n_samples):
 		hps = generate_hyperparameters()
 		trial_id = partial_train.remote(hps,known_epochs)
 		remaining_ids.append(trial_id)
