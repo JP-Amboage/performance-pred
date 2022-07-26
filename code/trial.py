@@ -1,6 +1,3 @@
-from importlib.metadata import SelectableGroups
-
-from pytest import hookspec
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.layers import MaxPooling2D
