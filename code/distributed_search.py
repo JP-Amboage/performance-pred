@@ -20,10 +20,6 @@ import ray
 
 ray.init()
 
-# The number of sets of random hyperparameters to try.
-num_evaluations = 10
-
-
 # A function for generating random hyperparameters.
 def generate_hyperparameters():
 	return {
@@ -88,8 +84,10 @@ def finish_training(trial, n_epochs):
 @click.option('--y_scaler_file', default="y_scaler.joblib", help='Joblib file storing the y scaler used when trained the model')
 @click.option('--top_k', default=10, help='Number of configurations that will be fully trained')
 @click.option('--n_samples', default=100, help='Number of configurations that will be partially trained')
-@click.option('--presults_file', default="presults.csv", help='File to store the results of partially rained configs')
-def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: str, y_scaler_file: str, top_k: int, n_samples: int, presults_file: str ):
+@click.option('--presults_file', default="presults.csv", help='File to store the results of partially trained configs')
+@click.option('--fresults_file', default="fresults.csv", help='File to store the results of totally trained configs')
+
+def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: str, y_scaler_file: str, top_k: int, n_samples: int,fresults_file: str ):
 	
 	#instantiate the performance predictor
 	predictor = Predictor(svr=model_file, x_scaler = x_scaler_file, y_scaler = y_scaler_file)
@@ -100,16 +98,12 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 	# A list holding the object refs for all of the experiments that we have
 	# launched but have not yet been processed.
 	remaining_ids = []
-	# A dictionary mapping an experiment's object ref to its hyperparameters.
-	# hyerparameters used for that experiment.
-	hps_mapping = {}
 
 	# Randomly generate sets of hyperparameters and launch a task to evaluate it.
-	for i in range(num_evaluations):
+	for i in range(known_epochs):
 		hps = generate_hyperparameters()
 		trial_id = partial_train.remote(hps,known_epochs)
 		remaining_ids.append(trial_id)
-		hps_mapping[trial_id] = hps
 	
 	# Fetch and print the results of the tasks in the order that they complete.
 	while remaining_ids:
@@ -118,7 +112,7 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 		# There is only one return result by default.
 		result_id = done_ids[0]
 
-		hps = hps_mapping[result_id]
+		hps = trial.config
 		trial = ray.get(result_id)
 
 		pred = predictor.predict(hps, trial.loss[:])
@@ -127,7 +121,7 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 		for hp in list(hps.values()):
 			line.append(hp)
 		line.extend(trial.loss)
-		line.append(pred)
+		line.append(predictor.y_scaler.inverse_transform(pred))
 		with open("results", 'a') as file:
 			writer = csv.writer(file)
 			writer.writerow(line)
@@ -141,21 +135,32 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 					best_pred.insert(idx,pred)
 					best_trials.insert(idx,trial)
 				break
+	
+	#Launch tasks to finish evaluation of most prmising trials
+	for trial in best_trials:
+		trial_id = finish_training.remote(trial,total_epochs-known_epochs)
+		remaining_ids.append(trial_id)
+	
+	finished_trials = []
+	i=0
+	# Fetch and print the final results of the tasks in the order that they complete.
+	while remaining_ids:
+		# Use ray.wait to get the object ref of the first task that completes.
+		done_ids, remaining_ids = ray.wait(remaining_ids)
+		trial = ray.get(done_ids[0])
+		finished_trials.append(trial)
+		dump(trial, "trial_"+str(i)+".joblib")
+		line = []
+		for hp in list(trial.config.values()):
+			line.append(hp)
+			line.extend(trial.loss)
+			line.append(predictor.y_scaler.inverse_transform(pred))
+			with open(fresults_file, 'a') as file:
+				writer = csv.writer(file)
+				writer.writerow(line)
 
-	#finish the training of the most promising configs
-	print(#change to print to a file
-		"""Best accuracy over {} trials was {:.3} with
-		learning_rate: {:.2}
-		batch_size: {}
-		momentum: {:.2}
-		""".format(
-			num_evaluations,
-			100 * best_accuracy,
-			best_hyperparameters["learning_rate"],
-			best_hyperparameters["batch_size"],
-			best_hyperparameters["momentum"],
-		)
-	)
+
+
 
 if __name__ == "__main__":
 	main()
