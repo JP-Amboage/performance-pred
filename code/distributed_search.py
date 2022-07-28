@@ -20,7 +20,7 @@ from sklearn.model_selection import train_test_split
 
 import ray
 
-ray.init()
+ray.init(address="auto")
 
 # A function for generating random hyperparameters.
 def generate_hyperparameters():
