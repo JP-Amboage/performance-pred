@@ -10,7 +10,6 @@ import csv
 import click
 import numpy as np
 from filelock import FileLock
-from sqlalchemy import false
 from trial import Trial
 from joblib import load, dump
 
