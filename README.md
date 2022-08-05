@@ -9,13 +9,13 @@ This project aims to asses the potential of using performance prediction techniq
 
 ## Some plots
 
-<p float="left" style="background-color:lightgray;">
+<p float="left">
   <img src="results/mlpf_SVR_vs_NuSVR.png" alt="Importance of learning curve and diffs" width="300"/>
    <img src="results/mlpf_curve_info.png" alt="R^2 vs known fraction for SVR and NuSVR" width="300"/>
    <img src="results/mlpf_train_size.png" alt="Importance of train size" width="300"/>
 </p>
 
-<p float="left" style="background-color:lightgray;" >
+<p float="left" >
   <img src="results/mlpf_worst_case.png" alt="Downsampled curve and small training set" width="900"/>
 </p>
 
