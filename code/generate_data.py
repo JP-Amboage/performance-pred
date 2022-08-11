@@ -51,7 +51,7 @@ def sample_config(search_space):
 	return config
 
 @click.command()
-@click.option('--n_samples', default=0, help='Number of random samples to generate.')
+@click.option('--n_samples', default=100, help='Number of random samples to generate.')
 @click.option('--max_epochs', default=12, help='Number of epochs.')
 @click.option('--filename', default="dataset.csv", help='CSV file where the generated samples will be stored')
 @click.option('--train_ratio', default=0.8, help='Train ratio used')
@@ -84,7 +84,7 @@ def main(n_samples: int, max_epochs: int, filename :str, train_ratio: float):
 		X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(1-train_ratio))
 		config = sample_config(search_space)
 		print(config)
-		trial = Trial(config, X_train, X_test, y_train, y_test)
+		trial = Trial(config, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
 		trial.run_n_epochs(max_epochs)
 		line = list(trial.config.values())
 		line.extend(trial.acc)

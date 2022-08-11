@@ -6,13 +6,13 @@ from tensorflow.keras.layers import Flatten
 from tensorflow.keras.optimizers import SGD
 
 class Trial:
-	def __init__(self, config, X_train, X_test, y_train, y_test) -> None:
+	def __init__(self, config, **kwargs):
 	
 		self.config=config
-		self.X_train = X_train
-		self.X_test = X_test
-		self.y_train = y_train
-		self.y_test = y_test
+		self.X_train = kwargs['X_train']
+		self.X_test = kwargs['X_test']
+		self.y_train = kwargs['y_train']
+		self.y_test = kwargs['y_test']
 		self.loss = []
 		self.acc = []
 		self.model = Sequential()

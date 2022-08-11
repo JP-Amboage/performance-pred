@@ -23,7 +23,7 @@ def train_n_confs(n_samples: int, train_ratio: float, search_space: dict, max_ep
 		X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(1-train_ratio))
 		config = sample_config(search_space)
 		print(config)
-		trial = Trial(config, X_train, X_test, y_train, y_test)
+		trial = Trial(config, X_train = X_train, X_test = X_test, y_train= y_train, y_test=y_test)
 		loss, acc = [],[]
 		trial.run_n_epochs(max_epochs)
 		trials.append(trial)
