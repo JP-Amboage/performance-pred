@@ -18,11 +18,40 @@ from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 
 import ray
-
-ray.init(address="auto")
+from ray.tune import grid_search, choice, uniform, quniform, loguniform, randint, qrandint
+#ray.init(address="auto")
+ray.init()
 
 # A function for generating random hyperparameters.
 def generate_hyperparameters():
+	return {
+		# Optimizer parameters
+		"lr": loguniform(1e-6, 3e-2).sample(),
+		# "activation": "elu",
+		# "batch_size_physical": quniform(16, 64, 16).sample(),
+		# "batch_size_gun": quniform(100, 800, 100).sample(),
+		# "batch_size_delphes": samp([8, 16, 24]).sample(),
+		# "expdecay_decay_steps": quniform(10, 2000, 10).sample(),
+		# "expdecay_decay_rate": uniform(0.9, 1).sample(),
+		# Model parameters
+		# "layernorm": quniform(0, 1, 1).sample(),
+		# "ffn_dist_hidden_dim": quniform(64, 256, 64).sample(),
+		# "ffn_dist_num_layers": quniform(1, 3, 1).sample(),
+		# "distance_dim": quniform(32, 256, 32).sample(),
+		# "num_node_messages": quniform(1, 3, 1).sample(),
+		"num_graph_layers_id": quniform(0, 4, 1).sample(),
+		"num_graph_layers_reg": quniform(0, 4, 1).sample(),
+		"dropout": uniform(0.0, 0.5).sample(),
+		"bin_size": choice([8, 16, 32, 64, 128]).sample(),
+		# "clip_value_low": uniform(0.0, 0.2),
+		# "dist_mult": uniform(0.01, 0.2),
+		# "normalize_degrees": quniform(0, 1, 1),
+		"output_dim": choice([8, 16, 32, 64, 128, 256]).sample(),
+		# "lr_schedule": choice([None, "cosinedecay"])  # exponentialdecay, cosinedecay, onecycle, none
+		"weight_decay": loguniform(1e-6, 1e-1).sample(),
+	}
+	'''
+	For simple mnist nn
 	return {
 		"filters": random.choice([8, 16, 32, 64, 128]),
 		"strides": random.choice([2, 3, 5]),
@@ -31,6 +60,7 @@ def generate_hyperparameters():
 		"lr": np.exp(random.uniform(np.log(1e-5),np.log(0.1))),
 		"momentum": random.uniform(0,1)
 	}
+	'''
 
 def get_data_loaders(train_ratio = 0.8, random_state = 42):
 	# We add FileLock here because multiple workers will want to
@@ -47,11 +77,13 @@ def get_data_loaders(train_ratio = 0.8, random_state = 42):
 
 class Predictor:
 	def __init__(self, svr: str, x_scaler: str, y_scaler: str):
+		return #like this for debugging
 		self.svr = load(svr)
 		self.x_scaler = load(x_scaler)
 		self.y_scaler = load(y_scaler)
 
 	def predict(self,config, curve):
+		return curve[-1] #like this for debugging
 		difs1, difs2 = self.__finite_difs(np.array(curve))
 		X = np.append(np.append(np.append(np.array(list(config.values())),np.array(curve)),difs1),difs2).reshape(1, -1)
 		X = self.x_scaler.transform(X)
@@ -71,9 +103,10 @@ class Predictor:
 @ray.remote
 def partial_train(config, n_epochs):
 	train, test = get_data_loaders()
-	trial = Trial(config, X_train=train['X'], X_test=test['X'], y_train=train['y'], y_test=test['y'])
+	#trial = Trial(config, X_train=train['X'], X_test=test['X'], y_train=train['y'], y_test=test['y'])
+	trial = Trial(config,config_file_path = '../parameters/delphes.yaml')
 	trial.run_n_epochs(n_epochs)
-	return trial
+	return trial.loss
 
 @ray.remote
 def finish_training(trial, n_epochs):
@@ -125,12 +158,15 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 	# A list holding the object refs for all of the experiments that we have
 	# launched but have not yet been processed.
 	remaining_ids = []
+	hps_mapping = {}
 
 	# Randomly generate sets of hyperparameters and launch a task to evaluate it.
 	for i in range(n_samples):
 		hps = generate_hyperparameters()
 		trial_id = partial_train.remote(hps,known_epochs)
 		remaining_ids.append(trial_id)
+		hps_mapping[trial_id] = hps
+
 	
 	# Fetch and print the results of the tasks in the order that they complete.
 	while remaining_ids:
@@ -139,16 +175,17 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 		# There is only one return result by default.
 		result_id = done_ids[0]
 
-		trial = ray.get(result_id)
-		hps = trial.config
+		trial_loss = ray.get(result_id)
+		hps = hps_mapping[result_id]
 
-		pred = predictor.predict(hps, trial.loss[:])
+		pred = predictor.predict(hps, trial_loss)
 		
 		line = []
 		for hp in list(hps.values()):
 			line.append(hp)
-		line.extend(trial.loss)
-		line.append(predictor.y_scaler.inverse_transform(pred.reshape(1, -1)))
+		line.extend(trial_loss)
+		#line.append(predictor.y_scaler.inverse_transform(pred.reshape(1, -1)))
+		line.append(pred)
 		print(pred)
 
 		with open(presults_file, 'a') as file:
@@ -162,17 +199,19 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 			for i in range(len(best_pred)):
 				if(pred > best_pred[i]):
 					best_pred.insert(i,pred)
-					best_trials.insert(i,trial)
+					best_trials.insert(i,result_id)
 					flag_inserted = True
 					break
 			if not flag_inserted:
 				best_pred.insert(top_k-1,pred)
-				best_trials.insert(top_k-1,trial)
+				best_trials.insert(top_k-1,result_id)
 	
-	#Launch tasks to finish evaluation of most prmising trials
+	#Launch tasks to finish evaluation of most promising trials
 	for trial in best_trials:
-		trial_id = finish_training.remote(trial,total_epochs-known_epochs)
+		#trial_id = finish_training.remote(trial,total_epochs-known_epochs)
+		trial_id = partial_train.remote(hps_mapping[trial],total_epochs)
 		remaining_ids.append(trial_id)
+		hps_mapping[trial_id] = hps_mapping.pop(trial)
 	
 	finished_trials = []
 	i=0
@@ -180,19 +219,18 @@ def main(known_epochs: int, total_epochs: int, model_file: str, x_scaler_file: s
 	while remaining_ids:
 		# Use ray.wait to get the object ref of the first task that completes.
 		done_ids, remaining_ids = ray.wait(remaining_ids)
-		trial = ray.get(done_ids[0])
+		result_id = done_ids[0]
+		trial_loss = ray.get(result_id)
 		finished_trials.append(trial)
-		dump(trial, "trial_"+str(i)+".joblib")
+		#dump(trial, "trial_"+str(i)+".joblib")
 		line = []
-		for hp in list(trial.config.values()):
+		for hp in list(hps_mapping[result_id].values()):
 			line.append(hp)
-		line.extend(trial.loss)
+		line.extend(trial_loss)
 		with open(fresults_file, 'a') as file:
 			writer = csv.writer(file)
 			writer.writerow(line)
 		i=i+1
-
-
 
 
 if __name__ == "__main__":
