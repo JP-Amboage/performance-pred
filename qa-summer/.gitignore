@@ -1,0 +1,11 @@
+# ignore everything in folder execpt .gitignore and REAMDE.md
+*
+*/
+!.gitignore
+!README.md
+
+# orginal .gitignore
+**/.DS_store
+**/utility_debug.log
+**/model_performance.log
+**/embedding.log
