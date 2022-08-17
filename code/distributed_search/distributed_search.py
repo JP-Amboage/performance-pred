@@ -8,110 +8,30 @@ import random
 import os
 import csv
 import click
-import numpy as np
-from filelock import FileLock
-from trial import Trial
-from joblib import load, dump
-
-from tensorflow.keras.datasets import mnist
-from tensorflow.keras.utils import to_categorical
-from sklearn.model_selection import train_test_split
 
 import ray
-from ray.tune import grid_search, choice, uniform, quniform, loguniform, randint, qrandint
 #ray.init(address="auto")
 ray.init()
 
 # A function for generating random hyperparameters.
-def generate_hyperparameters():
-	return {
-		# Optimizer parameters
-		"lr": loguniform(1e-6, 3e-2).sample(),
-		# "activation": "elu",
-		# "batch_size_physical": quniform(16, 64, 16).sample(),
-		# "batch_size_gun": quniform(100, 800, 100).sample(),
-		# "batch_size_delphes": samp([8, 16, 24]).sample(),
-		# "expdecay_decay_steps": quniform(10, 2000, 10).sample(),
-		# "expdecay_decay_rate": uniform(0.9, 1).sample(),
-		# Model parameters
-		# "layernorm": quniform(0, 1, 1).sample(),
-		# "ffn_dist_hidden_dim": quniform(64, 256, 64).sample(),
-		# "ffn_dist_num_layers": quniform(1, 3, 1).sample(),
-		# "distance_dim": quniform(32, 256, 32).sample(),
-		# "num_node_messages": quniform(1, 3, 1).sample(),
-		"num_graph_layers_id": quniform(0, 4, 1).sample(),
-		"num_graph_layers_reg": quniform(0, 4, 1).sample(),
-		"dropout": uniform(0.0, 0.5).sample(),
-		"bin_size": choice([8, 16, 32, 64, 128]).sample(),
-		# "clip_value_low": uniform(0.0, 0.2),
-		# "dist_mult": uniform(0.01, 0.2),
-		# "normalize_degrees": quniform(0, 1, 1),
-		"output_dim": choice([8, 16, 32, 64, 128, 256]).sample(),
-		# "lr_schedule": choice([None, "cosinedecay"])  # exponentialdecay, cosinedecay, onecycle, none
-		"weight_decay": loguniform(1e-6, 1e-1).sample(),
-	}
-	'''
-	For simple mnist nn
-	return {
-		"filters": random.choice([8, 16, 32, 64, 128]),
-		"strides": random.choice([2, 3, 5]),
-		"max_pool": random.choice([2, 3, 5]),
-		"1st_dense": random.choice([20, 40, 60, 80, 100, 120, 140, 160, 180, 200]),
-		"lr": np.exp(random.uniform(np.log(1e-5),np.log(0.1))),
-		"momentum": random.uniform(0,1)
-	}
-	'''
+from generate_hp import generate_hyperparameters
+# Predictor class encapsulates the performance predictor
+from mlpf_predictor import Predictor_mlpf as Predictor
+# Training function
+from remote_fun import remote_fun
 
-def get_data_loaders(train_ratio = 0.8, random_state = 42):
-	# We add FileLock here because multiple workers will want to
-	# download data, and this may cause overwrites 
-	with FileLock(os.path.expanduser("~/data.lock")):
-		(X_train, y_train), (X_test, y_test) = mnist.load_data()
-	
-	X = np.concatenate([X_train, X_test]).astype('float32')/255.0 #normalize to 0-1 range
-	y = to_categorical(np.concatenate([y_train, y_test]))
-	
-	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(1-train_ratio),random_state=42)
-
-	return {"X":X_train, "y":y_train}, {"X":X_test, "y":y_test}
-
-class Predictor:
-	def __init__(self, svr: str, x_scaler: str, y_scaler: str):
-		return #like this for debugging
-		self.svr = load(svr)
-		self.x_scaler = load(x_scaler)
-		self.y_scaler = load(y_scaler)
-
-	def predict(self,config, curve):
-		return curve[-1] #like this for debugging
-		difs1, difs2 = self.__finite_difs(np.array(curve))
-		X = np.append(np.append(np.append(np.array(list(config.values())),np.array(curve)),difs1),difs2).reshape(1, -1)
-		X = self.x_scaler.transform(X)
-		return self.svr.predict(X)
-	
-	def __finite_difs(self,curve):
-		difs1 = []
-		for j in range(1,curve.shape[0]):
-			difs1.append(curve[j]-curve[j-1])
-		difs2 = []
-		for j in range(1,len(difs1)):
-			difs2.append(difs1[j]-difs1[j-1])
-		difs1 = np.array(difs1)
-		difs2 = np.array(difs2)
-		return difs1, difs2
 
 @ray.remote
 def partial_train(config, n_epochs):
-	train, test = get_data_loaders()
-	#trial = Trial(config, X_train=train['X'], X_test=test['X'], y_train=train['y'], y_test=test['y'])
-	trial = Trial(config,config_file_path = '../parameters/delphes.yaml')
-	trial.run_n_epochs(n_epochs)
-	return trial.loss
+	return remote_fun(config, n_epochs)
 
+'''
+# intended to be used in cases were the trials that finish training continuing the partial training
+# not used in current version
 @ray.remote
 def finish_training(trial, n_epochs):
-	trial.run_n_epochs(n_epochs)
-	return trial
+	return
+'''
 
 @click.command()
 @click.option('--known_epochs', default=3, help='Number of epochs needed for the performance prediction.')
