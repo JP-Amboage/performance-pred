@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from sklearn.model_selection import train_test_split
+from joblib import dump
 
 #calculate finite diferences of 1st and 2nd order
 def finite_difs(curve):
@@ -74,3 +75,27 @@ def get_curve(df_info, known_curve, df):
 def get_target(df_info, df):
 	target = df[df.columns[df_info['min_curve_idx']+df_info['num_epochs']-2]].to_numpy()
 	return target
+
+# allows to exit jupyter notebook cell on a 'clean way'
+class StopCellExecution(Exception):
+    def _render_traceback_(self):
+        pass
+
+def exit_cell(message=''): 
+	print(message)
+	raise StopCellExecution
+
+# SAVE the needed attributes to reuse the model to do predictions
+def save_qsvr(qsvr_model, name):
+	qsvr_attrs = {
+		'X_train_reshaped' : qsvr_model.X_train_reshaped,
+		'Y_train': qsvr_model.Y_train,
+		'all_alphas' : qsvr_model.all_alphas,
+		'B' : qsvr_model.B,
+		'K' : qsvr_model.K,
+		'epsilon' : qsvr_model.epsilon,
+		'best_gamma' : qsvr_model.best_gamma,
+		'best_C' :qsvr_model.best_C,
+		'change_to_logarithmic' :qsvr_model.change_to_logarithmic,
+	}
+	dump(qsvr_attrs,name+".joblib")
