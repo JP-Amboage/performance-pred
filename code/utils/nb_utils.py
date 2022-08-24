@@ -85,9 +85,9 @@ def exit_cell(message=''):
 	print(message)
 	raise StopCellExecution
 
-# SAVE the needed attributes to reuse the model to do predictions
-def save_qsvr(qsvr_model, name):
-	qsvr_attrs = {
+# generate a dict with the attributes of the qsvr needed to do predictions
+def qsvr_to_pred_dict(qsvr_model):
+	model_dict = {
 		'X_train_reshaped' : qsvr_model.X_train_reshaped,
 		'Y_train': qsvr_model.Y_train,
 		'all_alphas' : qsvr_model.all_alphas,
@@ -98,4 +98,9 @@ def save_qsvr(qsvr_model, name):
 		'best_C' :qsvr_model.best_C,
 		'change_to_logarithmic' :qsvr_model.change_to_logarithmic,
 	}
-	dump(qsvr_attrs,name+".joblib")
+	if hasattr(qsvr_model, 'alphas'): model_dict['alphas'] = qsvr_model.alphas
+	return model_dict
+
+# SAVE the needed attributes to reuse the model to do predictions
+def save_qsvr(qsvr_model, name):
+	dump(qsvr_to_pred_dict(qsvr_model),name+".joblib")
